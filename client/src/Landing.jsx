@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   GraduationCap, ArrowRight, Search, Mail, Phone, MapPin, ChevronDown, Menu, X,
   Briefcase, Award, Users, Building2, Cpu, Code2, LineChart, Rocket, BookOpen,
-  FlaskConical, Wifi, Trophy, ShieldCheck, FileText, Upload, CheckCircle, Sparkles, Clock, LogIn, UserRound, KeyRound
+  FlaskConical, Wifi, Trophy, ShieldCheck, FileText, Upload, CheckCircle, Sparkles, Clock, LogIn
 } from "lucide-react";
 import Logo from "./Logo";
 import "./landing.css";
@@ -83,34 +83,6 @@ function Counter({ value, suffix }) {
   return <span ref={ref}>{n.toLocaleString("en-IN")}{suffix}</span>;
 }
 
-function LoginMenu({ user, variant }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const esc = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", close); document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
-  }, []);
-  if (user) {
-    const to = user.role === "admin" ? "/admin" : "/dashboard";
-    return <Link to={to} className={variant === "hero" ? "lp-btn lp-btn-ghost lp-big" : "lp-signin"}>{variant === "hero" && <LogIn size={18} />} My dashboard</Link>;
-  }
-  return (
-    <div className={`lp-menu ${variant}`} ref={ref}>
-      <button className={variant === "hero" ? "lp-btn lp-btn-ghost lp-big" : "lp-signin lp-signin-btn"} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}>
-        <LogIn size={variant === "hero" ? 18 : 16} /> Applicant / Admin Login <ChevronDown size={16} className={open ? "flip" : ""} />
-      </button>
-      {open && (
-        <div className="lp-drop" role="menu">
-          <Link to="/login" role="menuitem" onClick={() => setOpen(false)}><UserRound size={18} /><span><b>Applicant Login</b><small>Track your application &amp; payment</small></span></Link>
-          <Link to="/admin-login" role="menuitem" onClick={() => setOpen(false)}><KeyRound size={18} /><span><b>Admin Login</b><small>Go straight to the admin sign in</small></span></Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Landing({ user }) {
   const [menu, setMenu] = useState(false);
   const [open, setOpen] = useState(0);
@@ -123,6 +95,7 @@ export default function Landing({ user }) {
   }, []);
 
   const applyTo = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/register";
+  const loginTo = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/login";
   const go = (id) => { setMenu(false); document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); };
 
   return (
@@ -146,7 +119,9 @@ export default function Landing({ user }) {
             {[["about", "About"], ["programs", "Programmes"], ["placements", "Placements"], ["process", "How to Apply"], ["faq", "FAQs"], ["contact", "Contact"]].map(([id, l]) => (
               <button key={id} onClick={() => go(id)}>{l}</button>
             ))}
-            <LoginMenu user={user} variant="nav" />
+            <Link to={loginTo} className="lp-signin lp-login-nav">
+              <LogIn size={16} /> {user ? "My dashboard" : "Applicant / Admin Login"}
+            </Link>
           </nav>
           <Link to={applyTo} className="lp-btn lp-btn-gold lp-nav-cta">Apply Now <ArrowRight size={16} /></Link>
           <button className="lp-burger" onClick={() => setMenu(!menu)} aria-label="Menu">{menu ? <X /> : <Menu />}</button>
@@ -164,7 +139,9 @@ export default function Landing({ user }) {
             <p>Join one of Kolkata's leading institutions for engineering, technology and management — where learning meets industry and careers take off.</p>
             <div className="lp-hero-actions">
               <Link to={applyTo} className="lp-btn lp-btn-gold lp-big lp-pulse">Apply Now <ArrowRight size={18} /></Link>
-              <LoginMenu user={user} variant="hero" />
+              <Link to={loginTo} className="lp-btn lp-btn-ghost lp-big">
+                <LogIn size={18} /> {user ? "My dashboard" : "Applicant / Admin Login"}
+              </Link>
             </div>
             <div className="lp-hero-meta">
               <span><ShieldCheck size={16} /> Secure online application</span>
