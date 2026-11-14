@@ -1,0 +1,11 @@
+import { Router } from "express";
+import { protect } from "../middleware/authMiddleware.js";
+import { upload } from "../middleware/uploadMiddleware.js";
+import { getMyApplication, saveApplication, uploadDocuments, submitApplication } from "../controllers/applicationController.js";
+const router = Router();
+router.use(protect);
+router.get("/mine", getMyApplication);
+router.put("/mine", saveApplication);
+router.post("/mine/documents", upload.single("document"), uploadDocuments);
+router.post("/mine/submit", submitApplication);
+export default router;
