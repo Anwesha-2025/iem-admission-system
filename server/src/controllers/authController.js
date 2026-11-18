@@ -3,13 +3,26 @@ import User from "../models/User.js";
 import crypto from "crypto";
 import { makeToken } from "../utils/token.js";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
+const isStrongPassword = password =>
+  typeof password === "string" &&
+  password.length >= 8 &&
+  /[A-Za-z]/.test(password) &&
+  /\d/.test(password) &&
+  /[^A-Za-z0-9\s]/.test(password);
+
+const passwordRequirementMessage =
+  "Password must be at least 8 characters and contain letters, numbers, and at least one special character.";
 
 export const register = async (req, res, next) => {
   try {
     const { name, email, phone, address, password } = req.body;
     if (!name || !email || !phone || !address || !password) return res.status(400).json({ message: "All required fields must be completed." });
     if (!/^\d{10}$/.test(phone)) return res.status(400).json({ message: "Mobile number must contain exactly 10 digits." });
-    if (password.length < 8) return res.status(400).json({ message: "Password must contain at least 8 characters." });
+    if (!isStrongPassword(password)) {
+  return res.status(400).json({
+    message: passwordRequirementMessage
+  });
+}
     if (await User.findOne({ email: email.toLowerCase() })) return res.status(409).json({ message: "An account with this email already exists." });
     const user = await User.create({ name, email, phone, address, password: await bcrypt.hash(password, 12) });
     res.status(201).json({ token: makeToken(user._id), user: { id: user._id, name: user.name, email: user.email, role: user.role } });
@@ -53,7 +66,11 @@ export const resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
     if (!token || typeof token !== "string") return res.status(400).json({ message: "Invalid or expired reset link." });
-    if (!password || password.length < 8) return res.status(400).json({ message: "Password must contain at least 8 characters." });
+    if (!isStrongPassword(password)) {
+  return res.status(400).json({
+    message: passwordRequirementMessage
+  });
+}
     const user = await User.findOne({ resetPasswordToken: hashToken(token), resetPasswordExpires: { $gt: new Date() } }).select("+resetPasswordToken +resetPasswordExpires");
     if (!user) return res.status(400).json({ message: "This reset link is invalid or has expired. Please request a new one." });
     user.password = await bcrypt.hash(password, 12);

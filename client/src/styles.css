@@ -32,3 +32,49 @@
 .sub-card h4+.form-grid{margin-top:16px}
 .form-grid.three{grid-template-columns:repeat(3,1fr)}
 @media(max-width:900px){.form-grid.three{grid-template-columns:1fr}}
+
+/* ===== Password strength suggestions ===== */
+
+.password-strength {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.password-strength > div {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.password-strength > div span {
+  font-weight: 800;
+  min-width: 12px;
+}
+
+.strength-bad {
+  color: #c03935 !important;
+}
+
+.strength-good {
+  color: #218653 !important;
+}
+
+/* ===== Email warning popup ===== */
+
+.email-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 8px 10px;
+  background: #fff1f0;
+  border: 1px solid #ffd0cc;
+  border-radius: 6px;
+  color: #c03935;
+  font-size: 12px;
+  font-weight: 500;
+}

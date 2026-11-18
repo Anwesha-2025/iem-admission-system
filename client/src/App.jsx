@@ -34,6 +34,57 @@ const emailMessage=v=>{
   return "Enter a valid email address.";
 };
 const emailProps=()=>({onInvalid:e=>e.target.setCustomValidity(emailMessage(e.target.value)),onInput:e=>e.target.setCustomValidity("")});
+const isValidEmail = value => {
+  return /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(value.trim());
+};
+const passwordRules = password => ({
+  length: password.length >= 8,
+  alphanumeric:
+    /[A-Za-z]/.test(password) && /\d/.test(password),
+  special: /[^A-Za-z0-9\s]/.test(password)
+});
+
+const isStrongPassword = password =>
+  Object.values(passwordRules(password)).every(Boolean);
+
+function PasswordStrength({ password }) {
+  if (!password) return null;
+
+  const rules = passwordRules(password);
+
+  const items = [
+    ["length", "At least 8 characters"],
+    ["alphanumeric", "Contains both letters and numbers"],
+    ["special", "Contains at least one special character (@, #, $)"]
+  ];
+
+  const strong = isStrongPassword(password);
+
+  return (
+    <div className="password-strength" aria-live="polite">
+      {strong ? (
+        <b className="strength-good">✓ Strong Password</b>
+      ) : (
+        <>
+          <b className="strength-bad">
+            Weak Password – Suggestions:
+          </b>
+
+          {items.map(([key, label]) => (
+            <div
+              key={key}
+              className={rules[key] ? "strength-good" : "strength-bad"}
+            >
+              <span>{rules[key] ? "✓" : "✕"}</span>
+              {label}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 function PasswordInput({value,onChange,name="password",placeholder="Minimum 8 characters",minLength=8,autoComplete="current-password"}){
  const [show,setShow]=useState(false);
  return <div className="pw-wrap"><input type={show?"text":"password"} name={name} value={value} onChange={onChange} required minLength={minLength} placeholder={placeholder} autoComplete={autoComplete}/><button type="button" className="pw-eye" onClick={()=>setShow(v=>!v)} aria-label={show?"Hide password":"Show password"} title={show?"Hide password":"Show password"}>{show?<EyeOff size={18}/>:<EyeIcon size={18}/>}</button></div>
@@ -43,6 +94,7 @@ function AuthShell({admin=false,children}){
 }
 function LoginPage({register=false,admin=false}) {
  const {login,register:signup,user}=useAuth(),nav=useNavigate(),[form,setForm]=useState({name:"",email:"",phone:"",address:"",password:""}),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [emailWarning, setEmailWarning] = useState("");
  if(user)return <Navigate to={user.role==="admin"?"/admin":"/dashboard"}/>;
  const change=e=>setForm({...form,[e.target.name]:e.target.value});
  const submit=async e=>{e.preventDefault();setError("");setBusy(true);try{const u=register?await signup(form):await login({email:form.email,password:form.password,role:admin?"admin":"student"});nav(u.role==="admin"?"/admin":"/dashboard");}catch(err){setError(err.response?.data?.message||"Unable to continue. Please try again.");}finally{setBusy(false)}};
@@ -53,10 +105,53 @@ function LoginPage({register=false,admin=false}) {
   <Notice type="error" message={error}/>
   <form onSubmit={submit} className="form-stack">
    {register&&<Field label="Full name"><input name="name" value={form.name} onChange={change} required maxLength="200" placeholder="Enter your full name"/></Field>}
-   <Field label="Email address"><input type="email" name="email" value={form.email} onChange={change} required placeholder={admin?"admin@iem.edu":"you@example.com"} autoComplete="email" {...emailProps()}/></Field>
+   
+<Field label="Email address">
+  <input
+    type="email"
+    name="email"
+    value={form.email}
+    onChange={e => {
+      change(e);
+      setEmailWarning("");
+    }}
+    onBlur={e => {
+      const value = e.target.value.trim();
+
+      if (value && !isValidEmail(value)) {
+        setEmailWarning(
+          "Please enter a valid email address (e.g. name@gmail.com)."
+        );
+      } else {
+        setEmailWarning("");
+      }
+    }}
+    required
+    placeholder={admin ? "admin@iem.edu" : "you@example.com"}
+    autoComplete="email"
+  />
+
+  {emailWarning && (
+    <div className="email-warning">
+      <span>⚠</span> {emailWarning}
+    </div>
+  )}
+</Field>
+
    {register&&<><Field label="Mobile number"><input name="phone" value={form.phone} onChange={change} required pattern="[0-9]{10}" maxLength="10" placeholder="10-digit mobile number"/></Field><Field label="Address"><textarea name="address" value={form.address} onChange={change} required placeholder="Enter your address"/></Field></>}
-   <div className="field"><div className="label-row"><span>Password</span>{!register&&<Link to="/forgot-password" className="forgot-link">Forgot password?</Link>}</div><PasswordInput value={form.password} onChange={change} autoComplete={register?"new-password":"current-password"}/></div>
-   <button className="btn primary full" disabled={busy}>{busy?"Please wait...":register?"Create account":admin?"Sign in as admin":"Sign in"} <ArrowRight size={17}/></button>
+   <div className="field"><div className="label-row"><span>Password</span>{!register&&<Link to="/forgot-password" className="forgot-link">Forgot password?</Link>}</div><PasswordInput
+  value={form.password}
+  onChange={change}
+  autoComplete={register ? "new-password" : "current-password"}
+/>
+
+{register && <PasswordStrength password={form.password}/>}</div>
+   <button
+  className="btn primary full"
+  disabled={busy || (register && !isStrongPassword(form.password))}
+>
+  {busy ? "Please wait..." : register ? "Create Account" : "Sign In"}
+</button>
   </form>
   {admin?<div className="auth-switch">Not an administrator? <Link to="/login">Applicant login</Link></div>
    :<><div className="auth-switch">{register?"Already have an account?":"New to the portal?"} <Link to={register?"/login":"/register"}>{register?"Sign in":"Create an account"}</Link></div>{!register&&<div className="auth-switch tight">Administrator? <Link to="/admin-login">Admin login</Link></div>}</>}
@@ -70,7 +165,10 @@ function ForgotPassword(){
   <div className="eyebrow">ACCOUNT RECOVERY</div><h2>Forgot your password?</h2>
   <p className="muted">Enter the email address linked to your account. We'll email you a secure link to verify it's you and set a new password.</p>
   <Notice message={msg}/><Notice type="error" message={error}/>
-  {!msg&&<form onSubmit={submit} className="form-stack"><Field label="Email address"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@example.com" autoComplete="email" {...emailProps()}/></Field><button className="btn primary full" disabled={busy}>{busy?"Sending...":"Send reset link"} <Mail size={16}/></button></form>}
+  {!msg&&<form onSubmit={submit} className="form-stack"><Field label="Email address"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@example.com" autoComplete="email" {...emailProps()}/></Field><button
+  className="btn primary full"
+  disabled={busy || (register && !isStrongPassword(form.password))}
+>{busy?"Sending...":"Send reset link"} <Mail size={16}/></button></form>}
   <div className="auth-switch"><Link to="/login"><ArrowLeft size={12} style={{verticalAlign:"-2px"}}/> Back to sign in</Link></div>
  </AuthShell>
 }
@@ -80,7 +178,12 @@ function ResetPassword(){
  return <AuthShell>
   <div className="eyebrow">ACCOUNT RECOVERY</div><h2>Set a new password</h2>
   <p className="muted">Choose a strong password of at least 8 characters.</p>
-  {done?<Notice message="Password updated successfully. Redirecting you to sign in..."/>:<><Notice type="error" message={error}/><form onSubmit={submit} className="form-stack"><div className="field"><span>New password</span><PasswordInput name="pw" value={pw} onChange={e=>setPw(e.target.value)} autoComplete="new-password"/></div><div className="field"><span>Confirm new password</span><PasswordInput name="pw2" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Re-enter new password" autoComplete="new-password"/></div><button className="btn primary full" disabled={busy}>{busy?"Updating...":"Reset password"} <KeyRound size={16}/></button></form></>}
+  {done?<Notice message="Password updated successfully. Redirecting you to sign in..."/>:<><Notice type="error" message={error}/><form onSubmit={submit} className="form-stack"><div className="field"><span>New password</span><PasswordInput name="pw" value={pw} onChange={e=>setPw(e.target.value)} autoComplete="new-password"/>
+    <PasswordStrength password={pw}/>
+    </div><div className="field"><span>Confirm new password</span><PasswordInput name="pw2" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Re-enter new password" autoComplete="new-password"/></div><button
+  className="btn primary full"
+  disabled={busy || !isStrongPassword(pw) || pw !== pw2}
+>{busy?"Updating...":"Reset password"} <KeyRound size={16}/></button></form></>}
   <div className="auth-switch"><Link to="/login">Back to sign in</Link></div>
  </AuthShell>
 }
