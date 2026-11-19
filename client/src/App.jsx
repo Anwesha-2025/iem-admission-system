@@ -11,7 +11,10 @@ function AuthProvider({ children }) {
   const [user, setUser] = useState(null), [loading, setLoading] = useState(true);
   useEffect(() => { if (localStorage.getItem("iem_token")) api.get("/auth/me").then(r=>setUser(r.data.user)).catch(()=>localStorage.removeItem("iem_token")).finally(()=>setLoading(false)); else setLoading(false); }, []);
   const login = async (data) => { const r = await api.post("/auth/login", data); localStorage.setItem("iem_token",r.data.token); setUser(r.data.user); return r.data.user; };
-  const register = async (data) => { const r = await api.post("/auth/register", data); localStorage.setItem("iem_token",r.data.token); setUser(r.data.user); return r.data.user; };
+  const register = async (data) => {
+  const r = await api.post("/auth/register", data);
+  return r.data;
+};
   const logout = () => { localStorage.removeItem("iem_token"); setUser(null); };
   return <AuthContext.Provider value={{user,loading,login,register,logout}}>{children}</AuthContext.Provider>;
 }
@@ -27,10 +30,10 @@ function PageTitle({eyebrow,title,subtitle,action}) {return <div className="page
 function Status({status}) {const cls=status?.toLowerCase().replaceAll(" ","-")||"draft";return <span className={`status ${cls}`}>{status||"Draft"}</span>}
 const emailMessage=v=>{
   v=(v||"").trim();
-  if(!v.includes("@"))return /\.[a-z]{2,}$/i.test(v)?"'@' is missing in the email address.":"'@gmail.com' is missing in the email address.";
+  if(!v.includes("@"))return "'@' is missing in the email address.";
   const [local,domain]=v.split("@");
-  if(!local)return "Enter the part before '@' (for example anu@gmail.com).";
-  if(!domain)return "Add the domain after '@' (for example @gmail.com).";
+  if(!local)return "Enter the part before '@' (for example anu@example.com).";
+  if(!domain)return "Add the domain after '@' (for example @yourdomain.com).";
   return "Enter a valid email address.";
 };
 const emailProps=()=>({onInvalid:e=>e.target.setCustomValidity(emailMessage(e.target.value)),onInput:e=>e.target.setCustomValidity("")});
@@ -93,16 +96,80 @@ function AuthShell({admin=false,children}){
  return <div className="auth-page"><div className="auth-left"><Link to="/" className="auth-logo-card" title="Back to home"><Logo height={150}/></Link><div className="auth-copy"><div className="eyebrow light">INSTITUTE OF ENGINEERING & MANAGEMENT</div>{admin?<><h1>Admissions<br/>administration.</h1><p>Review applications, verify documents and manage admission decisions securely.</p><div className="auth-points"><span><ShieldCheck/> Restricted administrator access</span><span><CheckCircle/> Review &amp; approve applications</span><span><Users/> Manage applicant records</span></div></>:<><h1>Your future<br/>starts here.</h1><p>A single, secure place to apply, submit documents and follow your admission journey.</p><div className="auth-points"><span><CheckCircle/> Simple online application</span><span><CheckCircle/> Track your application status</span><span><CheckCircle/> Secure document submission</span></div></>}</div><div className="auth-foot">Kolkata · West Bengal</div></div><div className="auth-right"><div className="auth-form-wrap">{children}</div></div></div>
 }
 function LoginPage({register=false,admin=false}) {
- const {login,register:signup,user}=useAuth(),nav=useNavigate(),[form,setForm]=useState({name:"",email:"",phone:"",address:"",password:""}),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const {login,register:signup,user}=useAuth(),nav=useNavigate(),[form,setForm]=useState({name:"",email:"",phone:"",address:"",password:""}),[error,setError]=useState(""),[busy,setBusy]=useState(false),
+[info,setInfo]=useState(""),
+[unverified,setUnverified]=useState(false);
  const [emailWarning, setEmailWarning] = useState("");
  if(user)return <Navigate to={user.role==="admin"?"/admin":"/dashboard"}/>;
  const change=e=>setForm({...form,[e.target.name]:e.target.value});
- const submit=async e=>{e.preventDefault();setError("");setBusy(true);try{const u=register?await signup(form):await login({email:form.email,password:form.password,role:admin?"admin":"student"});nav(u.role==="admin"?"/admin":"/dashboard");}catch(err){setError(err.response?.data?.message||"Unable to continue. Please try again.");}finally{setBusy(false)}};
+ const submit = async e => {
+  e.preventDefault();
+
+  setError("");
+  setInfo("");
+  setUnverified(false);
+  setBusy(true);
+
+  try {
+    if (register) {
+      const r = await signup(form);
+      setInfo(r.message);
+      return;
+    }
+
+    const u = await login({
+      email: form.email,
+      password: form.password,
+      role: admin ? "admin" : "student"
+    });
+
+    nav(u.role === "admin" ? "/admin" : "/dashboard");
+
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+      "Unable to continue. Please try again."
+    );
+
+    if (err.response?.data?.needsVerification) {
+      setUnverified(true);
+    }
+
+  } finally {
+    setBusy(false);
+  }
+};
+
+const resend = async () => {
+  try {
+    const r = await api.post("/auth/resend-verification", {
+      email: form.email
+    });
+
+    setInfo(r.data.message);
+    setError("");
+    setUnverified(false);
+
+  } catch {
+    setError("Could not resend. Try again.");
+  }
+};
  return <AuthShell admin={admin}>
   <div className="eyebrow">{register?"CREATE YOUR ACCOUNT":admin?"ADMINISTRATOR ACCESS":"WELCOME BACK"}</div>
   <h2>{register?"Student registration":admin?"Admin sign in":"Sign in to your account"}</h2>
   <p className="muted">{register?"Create an account to begin your admission application.":admin?"Enter your administrator credentials to open the admissions dashboard.":"Enter your credentials to access the admission portal."}</p>
-  <Notice type="error" message={error}/>
+  <Notice message={info}/>
+<Notice type="error" message={error}/>
+
+{unverified && (
+  <button
+    type="button"
+    className="btn full"
+    onClick={resend}
+  >
+    Resend verification email
+  </button>
+)}
   <form onSubmit={submit} className="form-stack">
    {register&&<Field label="Full name"><input name="name" value={form.name} onChange={change} required maxLength="200" placeholder="Enter your full name"/></Field>}
    
@@ -172,6 +239,51 @@ function ForgotPassword(){
   <div className="auth-switch"><Link to="/login"><ArrowLeft size={12} style={{verticalAlign:"-2px"}}/> Back to sign in</Link></div>
  </AuthShell>
 }
+function VerifyEmail() {
+  const { token } = useParams();
+
+  const [status, setStatus] = useState("loading");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    api.post("/auth/verify-email", { token })
+      .then(r => {
+        setStatus("ok");
+        setMsg(r.data.message);
+      })
+      .catch(err => {
+        setStatus("error");
+        setMsg(
+          err.response?.data?.message ||
+          "Verification failed."
+        );
+      });
+  }, [token]);
+
+  return (
+    <AuthShell>
+      <div className="eyebrow">EMAIL VERIFICATION</div>
+
+      <h2>
+        {status === "loading"
+          ? "Verifying..."
+          : status === "ok"
+          ? "Email verified"
+          : "Verification failed"}
+      </h2>
+
+      <Notice
+        type={status === "error" ? "error" : "success"}
+        message={msg}
+      />
+
+      <div className="auth-switch">
+        <Link to="/login">Go to sign in</Link>
+      </div>
+    </AuthShell>
+  );
+}
+
 function ResetPassword(){
  const {token}=useParams(),nav=useNavigate(),[pw,setPw]=useState(""),[pw2,setPw2]=useState(""),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState("");
  const submit=async e=>{e.preventDefault();setError("");if(pw!==pw2)return setError("Passwords do not match.");setBusy(true);try{await api.post("/auth/reset-password",{token,password:pw});setDone(true);setTimeout(()=>nav("/login"),2500);}catch(err){setError(err.response?.data?.message||"Unable to reset password. Please try again.");}finally{setBusy(false)}};
@@ -357,6 +469,6 @@ function AdminDashboard(){const [apps,setApps]=useState([]),[q,setQ]=useState(""
 function AdminReview(){const {id}=useParams();const [app,setApp]=useState(null),[reason,setReason]=useState(""),[error,setError]=useState(""),[msg,setMsg]=useState("");const load=()=>api.get(`/admin/applications/${id}`).then(r=>setApp(r.data.application)).catch(e=>setError(e.response?.data?.message||"Could not load application."));useEffect(()=>{load()},[id]);const review=async status=>{setError("");setMsg("");try{const r=await api.patch(`/admin/applications/${id}/review`,{status,rejectionReason:reason});setApp(r.data.application);setMsg(r.data.message);}catch(e){setError(e.response?.data?.message||"Could not update status.")}};if(!app)return error?<><PageTitle eyebrow="APPLICATION REVIEW" title="Could not open this application" subtitle="Something went wrong while loading it."/><Notice type="error" message={error}/><Link className="btn secondary" to="/admin/applications"><ArrowLeft size={15}/> Back to applications</Link></>:<Loading/>;return <><PageTitle eyebrow="APPLICATION REVIEW" title={app.studentName} subtitle={`Application ID: ${app.applicationId||"Not assigned"}`} action={<Status status={app.status}/>}/><Notice message={msg}/><Notice type="error" message={error}/><section className="panel"><h3>Student &amp; guardian details</h3><div className="detail-grid">{[["Full name",app.studentName],["Email",app.student?.email],["Mobile",app.mobile],["Date of birth",new Date(app.dob).toLocaleDateString("en-IN")],["Gender",app.gender],["Guardian name",app.guardianName],["Guardian relationship",app.guardianRelation],["Guardian mobile",app.guardianMobile],["Guardian email",app.guardianEmail],["Guardian occupation",app.guardianOccupation],["Address",app.address],["Class 10 school",app.class10School],["Class 10 board",app.class10Board],["Class 10 marks",`${app.class10Marks}%`],["Class 12 school",app.class12School],["Class 12 board",app.class12Board],["Class 12 marks",`${app.class12Marks}%`],["Course applied",app.courseApplyingFor],["Qualifying exam",app.qualifyingExam],["Rank",app.qualifyingExamRank],["Percentile",app.qualifyingExamPercentile]].map(([k,v])=><div key={k}><span>{k}</span><b>{v||"—"}</b></div>)}</div><h3 className="subheading">Submitted documents</h3><div className="document-list">{app.documents.map(d=><div className="document-row" key={d._id||d.type}><FileText/><div className="doc-info"><b>{d.type}</b><small>{d.originalName}</small></div><a className="table-link" href={assetUrl(d.path)} target="_blank" rel="noreferrer"><Eye size={15}/> View</a></div>)}</div><h3 className="subheading">Admission decision</h3><Field label="Rejection reason (required only when rejecting)"><textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Enter a clear reason if rejecting the application."/></Field><div className="panel-actions"><button className="btn secondary" onClick={()=>review("Under Review")}>Mark under review</button><button className="btn primary" onClick={()=>review("Approved")}>Approve application</button><button className="btn danger" onClick={()=>review("Rejected")}>Reject application</button></div></section></>}
 function useParamsSafe(){return requireParams();}
 function requireParams(){return window.location.pathname.split("/").filter(Boolean).at(-1);}
-function App(){return <AuthProvider><Routes><Route path="/" element={<LandingRoute/>}/><Route path="/login" element={<LoginPage/>}/><Route path="/register" element={<LoginPage register/>}/><Route path="/admin-login" element={<LoginPage admin/>}/><Route path="/forgot-password" element={<ForgotPassword/>}/><Route path="/reset-password/:token" element={<ResetPassword/>}/><Route path="/dashboard" element={<Protected><Layout><Dashboard/></Layout></Protected>}/><Route path="/application" element={<Protected><Layout><ApplicationPage/></Layout></Protected>}/><Route path="/payment" element={<Protected><Layout><PaymentPage/></Layout></Protected>}/><Route path="/admin" element={<Protected admin><Layout><AdminDashboard/></Layout></Protected>}/><Route path="/admin/applications" element={<Protected admin><Layout><AdminDashboard/></Layout></Protected>}/><Route path="/admin/applications/:id" element={<Protected admin><Layout><AdminReview/></Layout></Protected>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></AuthProvider>}
+function App(){return <AuthProvider><Routes><Route path="/" element={<LandingRoute/>}/><Route path="/login" element={<LoginPage/>}/><Route path="/register" element={<LoginPage register/>}/><Route path="/admin-login" element={<LoginPage admin/>}/><Route path="/forgot-password" element={<ForgotPassword/>}/><Route path="/reset-password/:token" element={<ResetPassword/>}/><Route path="/verify-email/:token" element={<VerifyEmail/>}/><Route path="/dashboard" element={<Protected><Layout><Dashboard/></Layout></Protected>}/><Route path="/application" element={<Protected><Layout><ApplicationPage/></Layout></Protected>}/><Route path="/payment" element={<Protected><Layout><PaymentPage/></Layout></Protected>}/><Route path="/admin" element={<Protected admin><Layout><AdminDashboard/></Layout></Protected>}/><Route path="/admin/applications" element={<Protected admin><Layout><AdminDashboard/></Layout></Protected>}/><Route path="/admin/applications/:id" element={<Protected admin><Layout><AdminReview/></Layout></Protected>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></AuthProvider>}
 function LandingRoute(){const {user}=useAuth();return <Landing user={user}/>}
 export default App;
